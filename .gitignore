@@ -1,0 +1,8 @@
+/target
+*.bak
+.ffrr_backups/
+ffrr.config.json
+ffrr.connections.json
+ffrr_execution.log
+output/
+.DS_Store

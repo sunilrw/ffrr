@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FFRR Studio v1.0.0 — Fast Find, Replace &amp; Refactor Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+            display: ['"Syne"', 'sans-serif'],
+          },
+          colors: {
+            obsidian: { 950: '#05070b', 900: '#0a0e17', 850: '#0f1623', 800: '#162032', 700: '#23324d' },
+            amber: { 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706' },
+            cyan: { 400: '#22d3ee', 500: '#06b6d4' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      --bg-canvas: #05070b;
+      --bg-panel: #0a0e17;
+      --border-grid: #1b263b;
+      --accent-amber: #f59e0b;
+      --accent-cyan: #06b6d4;
+    }
+    body {
+      background-color: var(--bg-canvas);
+      background-image:
+        radial-gradient(circle at 15% 0%, rgba(245, 158, 11, 0.06), transparent 40%),
+        radial-gradient(circle at 85% 0%, rgba(6, 182, 212, 0.06), transparent 40%);
+      color: #e2e8f0;
+    }
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #05070b; }
+    ::-webkit-scrollbar-thumb { background: #23324d; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+    .ascii-logo {
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-amber-500 selection:text-black">
+
+  <!-- Top Industrial Command Header -->
+  <header class="border-b border-obsidian-700/80 bg-obsidian-950/90 backdrop-blur-md sticky top-0 z-30 px-6 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <pre class="ascii-logo font-mono text-[9px] text-amber-400 bg-obsidian-900 border border-amber-500/30 px-2.5 py-1.5 rounded-lg shadow-inner select-none hidden sm:block"> _____ _____ ____  ____  
+|  ___|  ___|  _ \|  _ \ 
+| |_  | |_  | |_) | |_) |
+|  _| |  _| |  _ &lt;|  _ &lt; 
+|_|   |_|   |_| \_\_| \_\</pre>
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="font-display text-lg font-extrabold tracking-tight text-white">FFRR STUDIO</span>
+            <span class="font-mono text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">v1.0.0</span>
+            <span class="font-mono text-[11px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">Rayon Multi-Core + Archive-Native</span>
+            <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">.zip .rar .gz .tar.gz .zst</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">Fast Find, Replace &amp; Refactor Engine <span class="text-slate-500">(File Find and Replace in Rust — fnr.exe + Modern Context/Intent &amp; Dedup Suite)</span></p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Tabs -->
+      <nav class="flex items-center bg-obsidian-900 border border-obsidian-700 p-1 rounded-xl gap-1 text-xs font-medium">
+        <button id="tab-btn-search" onclick="switchTab('search')" class="px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 bg-amber-500 text-black font-semibold shadow">
+          <span>[FIND/REPL]</span> Find &amp; Replace
+        </button>
+        <button id="tab-btn-group" onclick="switchTab('group')" class="px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 text-slate-300 hover:text-white">
+          <span>[GRP]</span> File Grouping
+        </button>
+        <button id="tab-btn-dupes" onclick="switchTab('dupes')" class="px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 text-slate-300 hover:text-white">
+          <span>[DUP]</span> Duplicate Finder
+        </button>
+        <button id="tab-btn-intent" onclick="switchTab('intent')" class="px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 text-slate-300 hover:text-white">
+          <span>[INTENT]</span> Context &amp; Intents
+        </button>
+        <button id="tab-btn-docs" onclick="switchTab('docs')" class="px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 text-slate-300 hover:text-white">
+          <span>[MAN]</span> Undo &amp; CLI Manual
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-5 space-y-5">
+
+    <!-- Global Multi-Source & File Mask Bar -->
+    <section class="p-4 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 shadow-2xl space-y-3">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+        <div class="lg:col-span-6">
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-semibold">Target Sources (Folders, Files, Globs, or .zip/.rar/.tar.gz/.gz/.zst — semicolon-separated)</label>
+            <div class="flex items-center gap-1.5 text-[11px] font-mono">
+              <button onclick="setQuickSource('samples')" class="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300 border border-obsidian-700">All Samples</button>
+              <button onclick="setQuickSource('samples/archives/bundle.zip')" class="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-amber-300 border border-obsidian-700">.zip</button>
+              <button onclick="setQuickSource('samples/archives/legacy_pack.rar')" class="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-amber-300 border border-obsidian-700">.rar</button>
+              <button onclick="setQuickSource('samples/archives/release.tar.gz')" class="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-amber-300 border border-obsidian-700">.tar.gz</button>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <input id="sources" type="text" value="samples" placeholder="samples;samples/archives/bundle.zip;/var/log"
+              class="w-full px-3.5 py-2 rounded-xl bg-obsidian-950 border border-obsidian-700 text-sm font-mono text-white focus:outline-none focus:border-amber-500" />
+            <button onclick="openFileBrowser()" class="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-mono text-amber-300 font-semibold shrink-0">
+              Drives / USB / Browse...
+            </button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-3">
+          <label class="block text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1">Include File Mask (-m / --fileMask)</label>
+          <input id="file_mask" type="text" value="*.*" placeholder="*.rs,*.cs,*.json,*.xml,*.log"
+            class="w-full px-3 py-2 rounded-xl bg-obsidian-950 border border-obsidian-700 text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+        </div>
+
+        <div class="lg:col-span-3">
+          <label class="block text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1">Exclude File Mask (-x / --excludeFileMask)</label>
+          <input id="exclude_mask" type="text" value="" placeholder="*.dll,*.exe,*.min.js"
+            class="w-full px-3 py-2 rounded-xl bg-obsidian-950 border border-obsidian-700 text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-4 pt-1 text-xs font-mono text-slate-300">
+        <div class="flex flex-wrap items-center gap-5">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="opt_recursive" type="checkbox" checked class="accent-amber-500 rounded" />
+            <span>Subdirectories</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="opt_archives" type="checkbox" checked class="accent-amber-500 rounded" />
+            <span class="text-cyan-300">Archives (.zip/.rar/.gz/.tar.gz/.zst)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="opt_gitignore" type="checkbox" checked class="accent-amber-500 rounded" />
+            <span>Respect .gitignore</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="opt_ignore_binary" type="checkbox" checked class="accent-amber-500 rounded" />
+            <span>Skip Binary</span>
+          </label>
+        </div>
+
+        <details class="text-xs font-mono">
+          <summary class="cursor-pointer text-slate-400 hover:text-amber-300 select-none">More Filters &amp; Switches (Exclude Dir, Hidden, Invert, Multiline, Context)...</summary>
+          <div class="mt-2 p-3 rounded-xl bg-obsidian-950 border border-obsidian-800 grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-1">Exclude Directories (--exclude-dir)</label>
+              <input id="exclude_dir" type="text" value=".git,node_modules,target,.pnpm-store" class="w-full px-2.5 py-1 rounded bg-obsidian-900 border border-obsidian-700 text-xs text-slate-200" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-1">Context Lines (-C / -B / -A)</label>
+              <input id="opt_context_lines" type="number" min="0" max="10" value="1" class="w-full px-2.5 py-1 rounded bg-obsidian-900 border border-obsidian-700 text-xs text-slate-200" />
+            </div>
+            <div class="flex flex-col justify-center gap-1.5 pt-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="opt_hidden" type="checkbox" class="accent-amber-500" />
+                <span>Include Hidden (--hidden)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="opt_multiline" type="checkbox" class="accent-amber-500" />
+                <span>Multiline Dot (-U)</span>
+              </label>
+            </div>
+            <div class="flex flex-col justify-center gap-1.5 pt-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="opt_invert" type="checkbox" class="accent-amber-500" />
+                <span>Invert Match (-v)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="opt_backup" type="checkbox" checked class="accent-amber-500" />
+                <span>Save Undo Backup</span>
+              </label>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 1: FIND & REPLACE STUDIO (fnr.exe + Modern Context & Refactor) -->
+    <!-- ================================================================== -->
+    <div id="tab-search" class="space-y-5">
+      <div class="p-5 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 shadow-2xl space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Find Box -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">Find Text or Regex Pattern (--find)</label>
+              <div class="flex items-center gap-1 text-[11px] font-mono">
+                <span class="text-slate-500">Presets:</span>
+                <button onclick="setFindPreset('http://', 'https://', false)" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-slate-300">http-&gt;https</button>
+                <button onclick="setFindPreset('legacy_user_id', 'account_id', false, true)" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-slate-300">SmartCase</button>
+                <button onclick="setFindPreset('TODO[:\\s]*(.*)', 'TODO [TRACKED]: $1', true)" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-slate-300">TODOs</button>
+              </div>
+            </div>
+            <textarea id="find_input" rows="3" placeholder="Enter literal text or regular expression to find..."
+              class="w-full p-3 rounded-xl bg-obsidian-950 border border-obsidian-700 font-mono text-sm text-white focus:outline-none focus:border-amber-500">http://</textarea>
+          </div>
+
+          <!-- Replace Box -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between flex-wrap gap-1">
+              <label class="text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold">Replace With (--replace — optional for Find-only)</label>
+              <div class="flex items-center gap-1 text-[10px] font-mono flex-wrap">
+                <span class="text-slate-500">Macros:</span>
+                <button onclick="insertMacro('{{UPPER}}')" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300">{{UPPER}}</button>
+                <button onclick="insertMacro('{{SNAKE}}')" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300">{{SNAKE}}</button>
+                <button onclick="insertMacro('{{CAMEL}}')" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300">{{CAMEL}}</button>
+                <button onclick="insertMacro('{{REDACT}}')" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-amber-300">{{REDACT}}</button>
+                <button onclick="insertMacro('{{SHA256}}')" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-emerald-300">{{SHA256}}</button>
+                <button onclick="insertMacro('{{DATE}}')" class="px-1.5 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-700 text-slate-300">{{DATE}}</button>
+                <span id="custom-macros-pills" class="flex items-center gap-1 flex-wrap"></span>
+                <button onclick="toggleCustomMacroDrawer()" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold">+ Custom Macro</button>
+              </div>
+            </div>
+            <textarea id="replace_input" rows="3" placeholder="Leave empty for Find Only, or enter replacement ($1, {{UPPER}}, {{REDACT}}, or your custom {{MACRO}})..."
+              class="w-full p-3 rounded-xl bg-obsidian-950 border border-obsidian-700 font-mono text-sm text-white focus:outline-none focus:border-cyan-500">https://</textarea>
+
+            <!-- Custom Macro Creator Drawer -->
+            <div id="custom-macro-drawer" class="hidden p-3 rounded-xl bg-obsidian-950 border border-amber-500/40 space-y-2 text-xs font-mono">
+              <div class="flex items-center justify-between">
+                <span class="text-amber-400 font-bold uppercase text-[11px]">Create / Manage User-Defined Macros (Saved in ffrr.macros.json)</span>
+                <button onclick="toggleCustomMacroDrawer()" class="text-slate-400 hover:text-white">[x]</button>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <input id="macro_name_in" type="text" placeholder="NAME (e.g. MY_TAG)" class="sm:col-span-3 px-2.5 py-1.5 rounded bg-obsidian-900 border border-obsidian-700 text-amber-300" />
+                <input id="macro_tpl_in" type="text" placeholder="Template: e.g. /* {{DATE}} {{FILE}}:{{LINE}} */ {{MATCH}}" class="sm:col-span-6 px-2.5 py-1.5 rounded bg-obsidian-900 border border-obsidian-700 text-white" />
+                <button onclick="saveCustomMacroFromUi()" class="sm:col-span-3 px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-black font-bold">Save {{MACRO}}</button>
+              </div>
+              <div class="text-[10px] text-slate-400">Tip: Inside your custom macro template you can use <code>{{MATCH}}</code>, <code>{{FILE}}</code>, <code>{{LINE}}</code>, <code>{{DATE}}</code>, <code>{{TIMESTAMP}}</code>, <code>{{UPPER}}</code>, <code>{{SHA256}}</code>, <code>{{ENV:VAR}}</code>.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Options & Lexical Scope Filter Row -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 pt-1 items-center">
+          <div class="md:col-span-5 flex flex-wrap items-center gap-3 text-xs font-mono">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="opt_regex" type="checkbox" class="accent-amber-500" />
+              <span>Regex (-E)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="opt_case" type="checkbox" class="accent-amber-500" />
+              <span>Case (-s)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="opt_word" type="checkbox" class="accent-amber-500" />
+              <span>Whole Word (-w)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="opt_preserve_case" type="checkbox" class="accent-amber-500" />
+              <span class="text-amber-300">Preserve Case (-P)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="opt_escape" type="checkbox" class="accent-amber-500" />
+              <span>Escape (\n)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="opt_keep_mtime" type="checkbox" class="accent-amber-500" />
+              <span>Keep Date</span>
+            </label>
+          </div>
+
+          <div class="md:col-span-3 flex items-center gap-1.5">
+            <label class="text-[11px] font-mono text-amber-400 font-bold shrink-0">Match Target:</label>
+            <select id="opt_search_target" class="w-full px-2.5 py-1.5 rounded-lg bg-obsidian-950 border border-amber-500/40 text-xs font-mono text-amber-300 font-semibold">
+              <option value="both" selected>Both (Filename + Contents)</option>
+              <option value="filename">Filename / Path Only (Instant)</option>
+              <option value="content">File Contents Only</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-2 flex items-center gap-1.5">
+            <label class="text-[11px] font-mono text-slate-400 shrink-0">Scope:</label>
+            <select id="opt_scope" class="w-full px-2 py-1.5 rounded-lg bg-obsidian-950 border border-obsidian-700 text-xs font-mono text-cyan-300">
+              <option value="all" selected>All Content</option>
+              <option value="code">Code Only</option>
+              <option value="comments">Comments Only</option>
+              <option value="strings">Strings Only</option>
+              <option value="keys">Config Keys</option>
+              <option value="values">Config Values</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-2 flex items-center gap-1.5">
+            <label class="text-[11px] font-mono text-slate-400 shrink-0">Enc:</label>
+            <select id="opt_encoding" class="w-full px-2 py-1.5 rounded-lg bg-obsidian-950 border border-obsidian-700 text-xs font-mono text-slate-200">
+              <option value="auto" selected>Auto-Detect</option>
+              <option value="utf-8">UTF-8</option>
+              <option value="utf-8-bom">UTF-8 BOM</option>
+              <option value="utf-16le">UTF-16LE</option>
+              <option value="utf-16be">UTF-16BE</option>
+              <option value="windows-1252">Windows-1252</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Action Buttons Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-obsidian-800">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button onclick="runSearch(true, false)" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs font-mono tracking-wide transition shadow-lg shadow-amber-500/20">
+              [FIND ONLY] Search Across Sources
+            </button>
+            <button onclick="runSearch(true, true)" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs font-mono tracking-wide transition shadow-lg shadow-cyan-500/20">
+              [DRY-RUN DIFF] Preview Replacements
+            </button>
+            <button onclick="runSearch(false, true)" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs font-mono tracking-wide transition shadow-lg shadow-emerald-600/20">
+              [REPLACE NOW] Execute &amp; Save Backup
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="stop-scan-btn" onclick="cancelActiveScan()" class="hidden px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs font-mono shadow-lg shadow-rose-600/30 animate-pulse">
+              [STOP / CANCEL SCAN]
+            </button>
+            <button onclick="toggleGenCmdDrawer()" class="px-3.5 py-2 rounded-xl bg-obsidian-800 hover:bg-obsidian-700 border border-amber-500/40 text-amber-300 text-xs font-mono">
+              Gen Command Line (fnr.exe / ffrr / rg)
+            </button>
+            <button onclick="undoLastTransaction()" class="px-3.5 py-2 rounded-xl bg-obsidian-800 hover:bg-obsidian-700 border border-obsidian-700 text-slate-300 text-xs font-mono">
+              Undo Last Replace
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Execution Progress Gauge & Telemetry Bar -->
+        <div id="live-progress-panel" class="hidden p-3.5 rounded-xl bg-obsidian-950 border border-cyan-500/50 space-y-2 font-mono text-xs">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span id="prog-spinner" class="inline-block h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping"></span>
+              <span id="prog-phase" class="text-amber-300 font-bold">Scanning...</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-4 text-[11px]">
+              <span class="text-slate-300">Discovered: <strong id="prog-discovered" class="text-white">0</strong></span>
+              <span class="text-slate-300">Scanned: <strong id="prog-scanned" class="text-cyan-300">0</strong></span>
+              <span class="text-slate-300">Matches: <strong id="prog-matches" class="text-amber-400">0</strong></span>
+              <span class="text-slate-300">Elapsed: <strong id="prog-elapsed" class="text-emerald-400">0.0s</strong></span>
+            </div>
+          </div>
+          <div class="w-full h-2.5 rounded-full bg-obsidian-800 overflow-hidden">
+            <div id="prog-bar-fill" class="h-full bg-gradient-to-r from-amber-500 via-cyan-400 to-emerald-400 transition-all duration-150" style="width: 15%"></div>
+          </div>
+          <div id="prog-current-path" class="text-[11px] text-slate-400 truncate">Preparing scan...</div>
+        </div>
+
+        <!-- Gen Command Line Drawer (fnr.exe signature feature + modern equivalents) -->
+        <div id="gen-cmd-drawer" class="hidden p-4 rounded-xl bg-obsidian-950 border border-amber-500/40 space-y-2.5 text-xs font-mono">
+          <div class="flex items-center justify-between">
+            <span class="text-amber-400 font-bold uppercase tracking-wider">Generated Command Line Equivalents (Copy &amp; Run in Terminal / Scripts)</span>
+            <button onclick="toggleGenCmdDrawer()" class="text-slate-400 hover:text-white">Close [x]</button>
+          </div>
+          <div class="space-y-2">
+            <div>
+              <div class="text-[10px] text-cyan-400 mb-0.5">1. Modern FFRR Single-Binary CLI:</div>
+              <input id="cmd_ffrr" readonly class="w-full px-3 py-1.5 rounded bg-obsidian-900 border border-obsidian-700 text-slate-100 select-all" />
+            </div>
+            <div>
+              <div class="text-[10px] text-amber-400 mb-0.5">2. Classic fnr.exe Drop-In Syntax ( Also accepted directly by `ffrr`! ):</div>
+              <input id="cmd_fnr" readonly class="w-full px-3 py-1.5 rounded bg-obsidian-900 border border-obsidian-700 text-slate-200 select-all" />
+            </div>
+            <div>
+              <div class="text-[10px] text-emerald-400 mb-0.5">3. Linux / macOS ripgrep + sed Pipeline Equivalent:</div>
+              <input id="cmd_unix" readonly class="w-full px-3 py-1.5 rounded bg-obsidian-900 border border-obsidian-700 text-slate-300 select-all" />
+            </div>
+            <div>
+              <div class="text-[10px] text-purple-400 mb-0.5">4. Windows PowerShell Script Equivalent:</div>
+              <input id="cmd_ps" readonly class="w-full px-3 py-1.5 rounded bg-obsidian-900 border border-obsidian-700 text-slate-300 select-all" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Summary Strip -->
+      <div id="search-stats" class="grid grid-cols-2 sm:grid-cols-6 gap-3"></div>
+
+      <!-- Results & Diff Split View -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-5 p-4 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 space-y-3">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">Matched Files &amp; Archive Entries</h3>
+          <div id="file-list-container" class="space-y-1.5 max-h-[540px] overflow-y-auto pr-1"></div>
+        </div>
+        <div class="lg:col-span-7 p-4 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 id="match-detail-title" class="text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold">Line Matches, Semantic Context &amp; Unified Diff</h3>
+          </div>
+          <div id="match-detail-container" class="space-y-3 max-h-[540px] overflow-y-auto pr-1 font-mono text-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TAB 2: FILE GROUPING & CLASSIFICATION                              -->
+    <!-- ================================================================== -->
+    <div id="tab-group" class="hidden space-y-4">
+      <div class="p-4 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-xs font-mono uppercase text-amber-400 font-bold">Group Files By:</span>
+          <button onclick="runGrouping('language')" class="px-3 py-1.5 rounded-lg bg-amber-500 text-black font-mono text-xs font-bold">Language / Category</button>
+          <button onclick="runGrouping('extension')" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-slate-200 font-mono text-xs">Extension (.ext)</button>
+          <button onclick="runGrouping('source')" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300 font-mono text-xs">Source / Archive Type</button>
+          <button onclick="runGrouping('encoding')" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-emerald-300 font-mono text-xs">Character Encoding</button>
+          <button onclick="runGrouping('size')" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-slate-200 font-mono text-xs">Size Bucket</button>
+          <button onclick="runGrouping('directory')" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-slate-200 font-mono text-xs">Parent Directory</button>
+          <button onclick="runGrouping('age')" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-slate-200 font-mono text-xs">Modification Age</button>
+        </div>
+        <div id="group-summary-badge" class="text-xs font-mono text-slate-400"></div>
+      </div>
+      <div id="group-results-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TAB 3: DUPLICATE & NEAR-DUPLICATE FILE FINDER                      -->
+    <!-- ================================================================== -->
+    <div id="tab-dupes" class="hidden space-y-4">
+      <div class="p-4 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-5 text-xs font-mono">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="dup_normalized" type="checkbox" checked class="accent-amber-500" />
+            <span>Ignore CRLF/Whitespace Differences</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="dup_near" type="checkbox" checked class="accent-amber-500" />
+            <span class="text-cyan-300">Detect Fuzzy Near-Duplicates (Jaccard Shingle Similarity &ge; 80%)</span>
+          </label>
+        </div>
+        <button onclick="runDuplicates()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-bold">
+          Scan for Exact &amp; Near Duplicates Across Sources &amp; Archives
+        </button>
+      </div>
+      <div id="dupes-summary-strip" class="grid grid-cols-2 sm:grid-cols-5 gap-3"></div>
+      <div id="dupes-results-container" class="space-y-3"></div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TAB 4: CONTEXT & INTENT ANALYZER                                   -->
+    <!-- ================================================================== -->
+    <div id="tab-intent" class="hidden space-y-4">
+      <div class="p-4 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-mono font-bold text-amber-400">Context &amp; Intent Discovery Engine</h2>
+          <p class="text-xs text-slate-400">Automatically scans code, configs, logs &amp; archives (.zip/.rar/.tar.gz) for semantic patterns and offers 1-click refactoring.</p>
+        </div>
+        <button onclick="runIntentScan()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-bold">
+          Run Full Intent &amp; Context Scan
+        </button>
+      </div>
+      <div id="intent-results-container" class="space-y-4"></div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TAB 5: UNDO TRANSACTIONS & FULL CLI MANUAL                         -->
+    <!-- ================================================================== -->
+    <div id="tab-docs" class="hidden space-y-5">
+      <div class="p-5 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-bold text-amber-400">Transactional Backup Journal (.ffrr_backups/)</h3>
+          <button onclick="loadTransactions()" class="px-3 py-1 rounded bg-obsidian-800 text-xs font-mono text-cyan-300">Refresh</button>
+        </div>
+        <div id="tx-list-container" class="space-y-2 font-mono text-xs"></div>
+      </div>
+
+      <div class="p-5 rounded-2xl bg-obsidian-900/95 border border-obsidian-700 space-y-5 font-mono text-xs">
+        <div>
+          <h3 class="text-sm font-bold text-cyan-400 uppercase tracking-wider">FFRR Complete CLI, fnr.exe, Macro, Archive &amp; Cloud Reference Manual</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Every switch below works identically across macOS, Linux, and Windows (`ffrr` / `ffrr.exe`).</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-300">
+          <div class="p-4 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-2">
+            <div class="text-amber-400 font-bold">1. Core Find, Replace &amp; Source Switches</div>
+            <pre class="text-slate-200 overflow-x-auto leading-relaxed">-f, --find &lt;PAT&gt;         Pattern to find (or 1st positional arg)
+-r, --replace &lt;STR&gt;      Replacement string (omit for Find-Only)
+-d, --dir &lt;PATH_OR_URI&gt;  Folder, archive, @profile, or remote URI
+-m, --file-mask &lt;MASK&gt;   Include masks ("*.rs,*.cs,*.json")
+-x, --exclude-mask &lt;M&gt;   Exclude masks ("*.dll,*.exe,*.min.js")
+    --exclude-dir &lt;D&gt;    Skip folders (".git,node_modules,target")
+    --no-recursive       Do not scan subdirectories
+    --no-archives        Skip .zip/.rar/.tar.gz/.gz/.zst archives
+    --hidden             Include hidden dot-files
+    --no-gitignore       Ignore .gitignore rules
+    --min-size / --max-size &lt;BYTES&gt;</pre>
+          </div>
+
+          <div class="p-4 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-2">
+            <div class="text-amber-400 font-bold">2. Matching, Case, Scope &amp; Output Switches</div>
+            <pre class="text-slate-200 overflow-x-auto leading-relaxed">-E, --regex              Regular expression mode ($1, ${name})
+-F, --fixed-strings      Literal fixed-string mode
+-s, --case-sensitive     Case-sensitive matching
+-i, --ignore-case        Case-insensitive (default: Smart Case)
+-w, --word-regexp        Whole word only
+-P, --preserve-case      Smart case-preserving replace
+-U, --multiline          Multiline dot matching
+    --escape             Parse \n, \r, \t, \xHH escapes
+-v, --invert-match       Non-matching lines only
+    --filename-only      Instant filename/path-only search
+    --content-only       Search inside file contents only
+    --scope &lt;SCOPE&gt;      all | code | comments | strings | keys | values
+-n, --dry-run            Preview without modifying disk
+    --diff               Print unified diff
+-B / -A / -C &lt;N&gt;         Context lines before / after / both
+-c / -l                  Count only (-c) or filenames only (-l)
+-o, --output &lt;FMT&gt;       table | compact | diff | json | csv | files
+-j, --threads &lt;N&gt;        Parallel worker threads (default: 4)</pre>
+          </div>
+
+          <div class="p-4 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-2">
+            <div class="text-cyan-400 font-bold">3. 100% Drop-In Classic fnr.exe Switches</div>
+            <pre class="text-slate-200 overflow-x-auto leading-relaxed">ffrr --cl --dir "samples" --fileMask "*.json,*.rs" \
+  --excludeFileMask "*.dll" --includeSubDirectories \
+  --caseSensitive --useRegEx --useEscapeChars \
+  --find "http://(\S+)" --replace "https://$1" \
+  --encoding "utf-8" --KeepModifiedDate --logFile out.log</pre>
+          </div>
+
+          <div class="p-4 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-2">
+            <div class="text-emerald-400 font-bold">4. Built-In &amp; Custom Replacement Macros</div>
+            <pre class="text-slate-200 overflow-x-auto leading-relaxed">{{UPPER}}   {{LOWER}}   {{SNAKE}}   {{CAMEL}}   {{PASCAL}}  {{KEBAB}}
+{{SHA256}}  {{BLAKE3}}  {{REDACT}}  {{BASE64}}  {{REVERSE}} {{LEN}}
+{{FILE}}    {{LINE}}    {{MATCH_INDEX}}         {{DATE}}    {{TIMESTAMP}}
+{{URLENCODE}}           {{URLDECODE}}           {{ENV:VAR_NAME}}
+Custom CLI: ffrr macros --add 'MY_TAG=/* {{DATE}} */ {{MATCH}}'</pre>
+          </div>
+
+          <div class="p-4 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-2">
+            <div class="text-purple-400 font-bold">5. Remote / Cloud URIs &amp; Saved @Profiles</div>
+            <pre class="text-slate-200 overflow-x-auto leading-relaxed">ssh://user@host[:port]/var/log     sftp://user@host:/app/config
+smb://server/share/folder          \\server\share\folder
+s3://bucket/prefix                 az://container/prefix
+gs://bucket/prefix                 https://host/blob.log
+Save Profile: ffrr connections --add prod-ssh="ssh://ubuntu@host:/var/log"
+Use Profile : ffrr -f "ERROR" -d "@prod-ssh"</pre>
+          </div>
+
+          <div class="p-4 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-2">
+            <div class="text-amber-300 font-bold">6. Subcommands (Grouping, Dupes, Intents, Undo, MCP)</div>
+            <pre class="text-slate-200 overflow-x-auto leading-relaxed">ffrr group -d samples --by language|extension|source|size|encoding|age
+ffrr dupes -d samples --normalized --near --similarity 0.80
+ffrr intent -d samples --pack secrets|pii|insecure-http|todos
+ffrr undo [--list]
+ffrr drives               # List Mac/Linux/Windows &amp; USB drives
+ffrr mcp --config         # Print AI Agent MCP JSON config</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- File Browser Modal -->
+  <div id="browser-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-obsidian-900 border border-obsidian-700 rounded-2xl max-w-2xl w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-obsidian-800 pb-3">
+        <div>
+          <h3 class="text-sm font-mono font-bold text-amber-400">Browse Server Directories &amp; Archives (.zip, .rar, .tar.gz, .gz)</h3>
+          <p id="browser-current-path" class="text-xs font-mono text-slate-400 mt-0.5"></p>
+        </div>
+        <button onclick="closeFileBrowser()" class="text-slate-400 hover:text-white font-mono text-xs">[ESC / Close]</button>
+      </div>
+      <div class="space-y-2 border-b border-obsidian-800 pb-3">
+        <div class="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-bold">Mounted Drives &amp; Connected USB Volumes (macOS /Volumes, Windows C:\..Z:\, Linux /mnt &amp; /media)</div>
+        <div id="browser-drives" class="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-xs"></div>
+      </div>
+      <div class="space-y-2 border-b border-obsidian-800 pb-3">
+        <div class="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold">Remote &amp; Cloud Source Connector (SSH, SFTP, Windows SMB/UNC, AWS S3, Azure Blob, GCS)</div>
+        <div class="flex flex-wrap gap-1.5 text-[11px] font-mono">
+          <input id="remote_prop_name" type="text" placeholder="Save as @name (optional)"
+            class="w-40 px-2.5 py-1.5 rounded-lg bg-obsidian-950 border border-obsidian-700 text-xs font-mono text-amber-300" />
+          <input id="remote_uri_input" type="text" placeholder="ssh://user@host:/var/log  or  sftp://user@host:/app  or  s3://bucket/path  or  az://container/path  or  gs://bucket/path"
+            class="flex-1 min-w-[220px] px-3 py-1.5 rounded-lg bg-obsidian-950 border border-obsidian-700 text-xs font-mono text-white" />
+          <button onclick="addRemoteUriSource(false)" class="px-2.5 py-1.5 rounded-lg bg-amber-500 text-black font-bold text-xs">Select URI</button>
+          <button onclick="addRemoteUriSource(true)" class="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold text-xs">+ Add URI</button>
+          <button onclick="saveRemoteConnectionProfile()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">Save @Profile</button>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button id="browser-up-btn" class="px-3 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 text-xs font-mono text-cyan-300">.. (Parent Directory)</button>
+        <button onclick="selectCurrentDirInBrowser()" class="px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold text-xs font-mono">Select Current Folder</button>
+        <button onclick="pickBrowserPath(currentBrowserDir, true)" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-black font-bold text-xs font-mono">+ Add Current Folder to Sources</button>
+      </div>
+      <div id="browser-entries" class="max-h-80 overflow-y-auto space-y-1 font-mono text-xs"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentSearchSummary = null;
+    let currentBrowserDir = '.';
+    let progressPollTimer = null;
+    let selectedFileIndex = -1;
+    let lastRenderedLiveCount = 0;
+
+    function startProgressPolling() {
+      stopProgressPolling(false);
+      selectedFileIndex = -1;
+      lastRenderedLiveCount = 0;
+      document.getElementById('file-list-container').innerHTML =
+        `<div class="p-4 text-xs font-mono text-amber-300 animate-pulse">Scanning sources... Live matches will appear here immediately and are clickable at any time.</div>`;
+      document.getElementById('match-detail-title').textContent = 'Waiting for first match...';
+      document.getElementById('match-detail-container').innerHTML =
+        `<div class="p-4 text-xs font-mono text-slate-500">Click any found file on the left as soon as it appears to read its full contents or open it in Finder.</div>`;
+
+      const panel = document.getElementById('live-progress-panel');
+      const stopBtn = document.getElementById('stop-scan-btn');
+      panel.classList.remove('hidden');
+      stopBtn.classList.remove('hidden');
+      document.getElementById('prog-spinner').className = 'inline-block h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping';
+      document.getElementById('prog-phase').textContent = 'Starting multi-threaded scan...';
+      document.getElementById('prog-bar-fill').style.width = '12%';
+
+      progressPollTimer = setInterval(async () => {
+        try {
+          const res = await fetch('/v1/progress');
+          const p = await res.json();
+          document.getElementById('prog-phase').textContent = p.phase || 'Scanning...';
+          document.getElementById('prog-discovered').textContent = p.files_discovered;
+          document.getElementById('prog-scanned').textContent = p.files_scanned;
+          document.getElementById('prog-matches').textContent = p.matches_found;
+          document.getElementById('prog-elapsed').textContent = (p.elapsed_ms / 1000).toFixed(1) + 's';
+          if (p.current_path) {
+            document.getElementById('prog-current-path').textContent = 'Active: ' + p.current_path;
+          }
+          renderLiveKpiCards(p);
+
+          if (p.live_results && p.live_results.length > 0) {
+            currentSearchSummary = {
+              total_files_scanned: p.files_scanned || p.files_discovered,
+              archive_entries_scanned: p.archive_entries_scanned,
+              files_with_matches: p.live_results.length,
+              total_matches: p.matches_found,
+              total_replacements: 0,
+              elapsed_ms: p.elapsed_ms,
+              dry_run: true,
+              results: p.live_results
+            };
+            if (p.live_results.length !== lastRenderedLiveCount) {
+              lastRenderedLiveCount = p.live_results.length;
+              renderFileListButtons(p.live_results);
+              if (selectedFileIndex === -1) {
+                selectFileResult(0);
+              }
+            }
+          }
+
+          if (p.files_discovered > 0 && p.files_scanned > 0) {
+            const pct = Math.min(100, Math.max(10, Math.round((p.files_scanned / p.files_discovered) * 100)));
+            document.getElementById('prog-bar-fill').style.width = pct + '%';
+          } else {
+            document.getElementById('prog-bar-fill').style.width = '35%';
+          }
+        } catch (_) {}
+      }, 150);
+    }
+
+    function stopProgressPolling(completed = true, summary = null) {
+      if (progressPollTimer) {
+        clearInterval(progressPollTimer);
+        progressPollTimer = null;
+      }
+      document.getElementById('stop-scan-btn').classList.add('hidden');
+      document.getElementById('prog-spinner').className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-400';
+      if (completed && summary) {
+        document.getElementById('prog-phase').textContent = `Completed (${summary.total_matches} matches across ${summary.files_with_matches} files)`;
+        document.getElementById('prog-discovered').textContent = summary.total_files_scanned;
+        document.getElementById('prog-scanned').textContent = summary.total_files_scanned;
+        document.getElementById('prog-matches').textContent = summary.total_matches;
+        document.getElementById('prog-elapsed').textContent = summary.elapsed_ms + ' ms';
+        document.getElementById('prog-bar-fill').style.width = '100%';
+        document.getElementById('prog-current-path').textContent = 'Ready.';
+      }
+    }
+
+    async function cancelActiveScan() {
+      await fetch('/v1/cancel', { method: 'POST' });
+      const res = await fetch('/v1/progress');
+      const p = await res.json();
+      stopProgressPolling(false);
+      const foundCount = (p.live_results && p.live_results.length) || 0;
+      document.getElementById('prog-phase').textContent = `Scan Stopped by User (${foundCount} matched file(s) ready to inspect below)`;
+      document.getElementById('prog-bar-fill').style.width = '100%';
+      if (p.live_results && p.live_results.length > 0) {
+        currentSearchSummary = {
+          total_files_scanned: p.files_scanned || p.files_discovered,
+          archive_entries_scanned: p.archive_entries_scanned,
+          files_with_matches: p.live_results.length,
+          total_matches: p.matches_found,
+          total_replacements: 0,
+          elapsed_ms: p.elapsed_ms,
+          dry_run: true,
+          results: p.live_results
+        };
+        renderFileListButtons(p.live_results);
+        if (selectedFileIndex === -1) {
+          selectFileResult(0);
+        }
+      }
+    }
+
+    function switchTab(tab) {
+      ['search', 'group', 'dupes', 'intent', 'docs'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById('tab-btn-' + t);
+        if (t === tab) {
+          btn.className = 'px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 bg-amber-500 text-black font-semibold shadow';
+        } else {
+          btn.className = 'px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 text-slate-300 hover:text-white';
+        }
+      });
+      if (tab === 'group') runGrouping('language');
+      if (tab === 'dupes') runDuplicates();
+      if (tab === 'intent') runIntentScan();
+      if (tab === 'docs') loadTransactions();
+    }
+
+    function setQuickSource(src) {
+      document.getElementById('sources').value = src;
+      runSearch(true, false);
+    }
+
+    function setFindPreset(findStr, replStr, isRegex, preserveCase = false) {
+      document.getElementById('find_input').value = findStr;
+      document.getElementById('replace_input').value = replStr;
+      document.getElementById('opt_regex').checked = !!isRegex;
+      document.getElementById('opt_preserve_case').checked = !!preserveCase;
+      runSearch(true, true);
+    }
+
+    function insertMacro(macro) {
+      const el = document.getElementById('replace_input');
+      el.value = (el.value || '') + macro;
+      el.focus();
+    }
+
+    function toggleGenCmdDrawer() {
+      document.getElementById('gen-cmd-drawer').classList.toggle('hidden');
+    }
+
+    async function runSearch(dryRun, includeReplace) {
+      const findVal = document.getElementById('find_input').value;
+      const replVal = includeReplace ? document.getElementById('replace_input').value : null;
+      const payload = {
+        source: document.getElementById('sources').value,
+        file_mask: document.getElementById('file_mask').value,
+        exclude_mask: document.getElementById('exclude_mask').value,
+        exclude_dir: document.getElementById('exclude_dir') ? document.getElementById('exclude_dir').value : null,
+        recursive: document.getElementById('opt_recursive').checked,
+        include_archives: document.getElementById('opt_archives').checked,
+        include_hidden: document.getElementById('opt_hidden') ? document.getElementById('opt_hidden').checked : false,
+        respect_gitignore: document.getElementById('opt_gitignore').checked,
+        ignore_binary: document.getElementById('opt_ignore_binary').checked,
+        find: findVal,
+        replace: replVal,
+        search_target: document.getElementById('opt_search_target').value,
+        use_regex: document.getElementById('opt_regex').checked,
+        case_sensitive: document.getElementById('opt_case').checked,
+        whole_word: document.getElementById('opt_word').checked,
+        multiline: document.getElementById('opt_multiline') ? document.getElementById('opt_multiline').checked : false,
+        preserve_case: document.getElementById('opt_preserve_case').checked,
+        invert_match: document.getElementById('opt_invert') ? document.getElementById('opt_invert').checked : false,
+        use_escape_chars: document.getElementById('opt_escape').checked,
+        keep_mtime: document.getElementById('opt_keep_mtime').checked,
+        create_backup: document.getElementById('opt_backup') ? document.getElementById('opt_backup').checked : true,
+        scope: document.getElementById('opt_scope').value,
+        encoding: document.getElementById('opt_encoding').value,
+        dry_run: dryRun,
+        context_lines: document.getElementById('opt_context_lines') ? parseInt(document.getElementById('opt_context_lines').value || '1', 10) : 1
+      };
+
+      startProgressPolling();
+      try {
+        const res = await fetch('/v1/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.error) {
+          stopProgressPolling(false);
+          alert('Error: ' + data.error);
+          return;
+        }
+        currentSearchSummary = data;
+        stopProgressPolling(true, data);
+        renderSearchSummary(data);
+      } catch (err) {
+        stopProgressPolling(false);
+      }
+    }
+
+    function renderLiveKpiCards(p) {
+      const statsEl = document.getElementById('search-stats');
+      const cards = [
+        { label: 'Files Discovered', val: p.files_discovered, color: 'text-white' },
+        { label: 'Archive Entries', val: p.archive_entries_scanned, color: 'text-cyan-400' },
+        { label: 'Files Scanned', val: p.files_scanned, color: 'text-amber-400' },
+        { label: 'Live Matches', val: p.matches_found, color: 'text-amber-300' },
+        { label: 'Status', val: p.is_running ? 'SCANNING...' : 'DONE', color: 'text-emerald-400' },
+        { label: 'Elapsed Time', val: (p.elapsed_ms / 1000).toFixed(1) + ' s', color: 'text-cyan-300' }
+      ];
+      statsEl.innerHTML = cards.map(c => `
+        <div class="p-3 rounded-xl bg-obsidian-900 border border-cyan-500/30">
+          <div class="text-[10px] font-mono uppercase text-slate-400">${c.label}</div>
+          <div class="text-lg font-mono font-bold ${c.color} mt-0.5">${c.val}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderSearchSummary(data) {
+      if (data.cli_equivalents) {
+        document.getElementById('cmd_ffrr').value = data.cli_equivalents.ffrr_cmd;
+        document.getElementById('cmd_fnr').value = data.cli_equivalents.fnr_exe_cmd;
+        document.getElementById('cmd_unix').value = data.cli_equivalents.unix_cmd;
+        document.getElementById('cmd_ps').value = data.cli_equivalents.powershell_cmd;
+      }
+
+      const statsEl = document.getElementById('search-stats');
+      const cards = [
+        { label: 'Files Scanned', val: data.total_files_scanned, color: 'text-white' },
+        { label: 'Archive Entries', val: data.archive_entries_scanned, color: 'text-cyan-400' },
+        { label: 'Files Matched', val: data.files_with_matches, color: 'text-amber-400' },
+        { label: 'Total Matches', val: data.total_matches, color: 'text-amber-300' },
+        { label: data.dry_run ? 'Preview Replacements' : 'Applied Replacements', val: data.total_replacements, color: 'text-emerald-400' },
+        { label: 'Engine Speed', val: data.elapsed_ms + ' ms', color: 'text-cyan-300' }
+      ];
+      statsEl.innerHTML = cards.map(c => `
+        <div class="p-3 rounded-xl bg-obsidian-900 border border-obsidian-700">
+          <div class="text-[10px] font-mono uppercase text-slate-400">${c.label}</div>
+          <div class="text-lg font-mono font-bold ${c.color} mt-0.5">${c.val}</div>
+        </div>
+      `).join('');
+
+      const listEl = document.getElementById('file-list-container');
+      if (!data.results || data.results.length === 0) {
+        listEl.innerHTML = `<div class="p-4 text-xs font-mono text-slate-500">No matches found across scanned sources.</div>`;
+        document.getElementById('match-detail-container').innerHTML = '';
+        return;
+      }
+
+      renderFileListButtons(data.results);
+      selectFileResult(0);
+    }
+
+    function renderFileListButtons(results) {
+      const listEl = document.getElementById('file-list-container');
+      listEl.innerHTML = results.map((r, idx) => `
+        <div class="p-2.5 rounded-xl bg-obsidian-950 hover:bg-obsidian-800 border ${selectedFileIndex === idx ? 'border-amber-500' : 'border-obsidian-700'} transition space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <button onclick="selectFileResult(${idx})" class="text-left flex-1 truncate">
+              <div class="font-mono text-xs text-amber-300 font-bold truncate">${escapeHtml(r.file_name || r.path)}</div>
+              <div class="font-mono text-[11px] text-slate-300 truncate" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</div>
+            </button>
+            <span class="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-xs font-bold shrink-0">
+              ${r.match_count}
+            </span>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-1 text-[10px] font-mono pt-1 border-t border-obsidian-800/80">
+            <div class="flex items-center gap-1.5">
+              <span class="px-1.5 py-0.2 rounded bg-obsidian-800 text-cyan-300 border border-obsidian-700">${escapeHtml(r.archive_kind)}</span>
+              <span class="px-1.5 py-0.2 rounded bg-obsidian-800 text-slate-400">${escapeHtml(r.encoding)}</span>
+              <span class="text-slate-500">${r.size_bytes} B</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="selectFileResult(${idx}); loadFullFileReader(${idx})" class="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-semibold">Read File</button>
+              <button onclick="openOsAction('${escapeJs(r.path)}', 'reveal', 1)" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold">Finder</button>
+              <button onclick="openOsAction('${escapeJs(r.path)}', 'open', 1)" class="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-semibold">Open</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function openOsAction(path, action, line = 1) {
+      const res = await fetch('/v1/open-os', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, action, line })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert('Action Error: ' + data.error);
+      }
+    }
+
+    async function copyTextToClipboard(text, label = 'Copied') {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_) {}
+    }
+
+    let currentReaderContent = '';
+
+    async function loadFullFileReader(idx) {
+      if (!currentSearchSummary || !currentSearchSummary.results[idx]) return;
+      const r = currentSearchSummary.results[idx];
+      const readerBox = document.getElementById('builtin-file-reader-box');
+      if (readerBox) {
+        readerBox.innerHTML = `<div class="p-4 text-amber-300 animate-pulse">Loading full file contents for ${escapeHtml(r.path)}...</div>`;
+      }
+      const res = await fetch('/v1/read-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: r.path })
+      });
+      const data = await res.json();
+      if (data.error) {
+        if (readerBox) {
+          readerBox.innerHTML = `<div class="p-3 text-rose-400">Error reading file: ${escapeHtml(data.error)}</div>`;
+        }
+        return;
+      }
+      currentReaderContent = data.content || '';
+      const matchedLineNums = new Set((r.matches || []).map(m => m.line_number));
+      const lines = currentReaderContent.split('\n');
+      const renderedLines = lines.slice(0, 2500).map((ln, i) => {
+        const lnum = i + 1;
+        const isHit = matchedLineNums.has(lnum) && r.matches[0]?.scope_kind !== 'filename';
+        return `<div class="flex ${isHit ? 'bg-amber-500/20 text-amber-200 font-semibold' : 'hover:bg-obsidian-900/70 text-slate-200'} px-2 py-0.5">
+          <span class="w-12 shrink-0 select-none text-right pr-3 text-slate-500">${lnum}</span>
+          <span class="whitespace-pre overflow-x-auto">${escapeHtml(ln)}</span>
+        </div>`;
+      }).join('');
+
+      if (readerBox) {
+        readerBox.innerHTML = `
+          <div class="p-3 rounded-xl bg-obsidian-950 border border-cyan-500/40 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-obsidian-800">
+              <div>
+                <span class="text-cyan-400 font-bold uppercase text-[11px]">Built-In File Reader: ${escapeHtml(data.file_name)}</span>
+                <span class="text-slate-400 text-[11px] ml-2">(${data.total_lines} lines, ${data.size_bytes} bytes, ${data.encoding})</span>
+              </div>
+              <button onclick="copyTextToClipboard(currentReaderContent)" class="px-2.5 py-1 rounded bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300 text-[11px]">Copy Full File Content</button>
+            </div>
+            <div class="max-h-[420px] overflow-y-auto font-mono text-xs leading-relaxed bg-obsidian-900/50 rounded-lg py-1">
+              ${renderedLines}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function selectFileResult(idx) {
+      if (!currentSearchSummary || !currentSearchSummary.results[idx]) return;
+      selectedFileIndex = idx;
+      renderFileListButtons(currentSearchSummary.results);
+      const r = currentSearchSummary.results[idx];
+      const firstLine = (r.matches && r.matches[0] && r.matches[0].line_number) || 1;
+      document.getElementById('match-detail-title').textContent = `${r.path} (${r.match_count} matches, ${r.encoding})`;
+      const detailEl = document.getElementById('match-detail-container');
+
+      let html = `
+        <div class="p-3 rounded-xl bg-obsidian-950 border border-amber-500/40 flex flex-wrap items-center justify-between gap-2">
+          <div class="truncate max-w-full">
+            <div class="text-xs font-bold text-amber-300 truncate">${escapeHtml(r.path)}</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Encoding: ${escapeHtml(r.encoding)} | Size: ${r.size_bytes} bytes | Source: ${escapeHtml(r.archive_kind)}</div>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <button onclick="loadFullFileReader(${idx})" class="px-2.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold">
+              [Read Full File]
+            </button>
+            <button onclick="openOsAction('${escapeJs(r.path)}', 'reveal', ${firstLine})" class="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold">
+              [Open in Finder / Explorer]
+            </button>
+            <button onclick="openOsAction('${escapeJs(r.path)}', 'open', ${firstLine})" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold">
+              [Open Default App]
+            </button>
+            <button onclick="openOsAction('${escapeJs(r.path)}', 'textedit', ${firstLine})" class="px-2.5 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 border border-obsidian-700 text-slate-200">
+              [Text Editor]
+            </button>
+            <button onclick="openOsAction('${escapeJs(r.path)}', 'vscode', ${firstLine})" class="px-2.5 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 border border-obsidian-700 text-cyan-300">
+              [VS Code]
+            </button>
+            <button onclick="openOsAction('${escapeJs(r.path)}', 'terminal', ${firstLine})" class="px-2.5 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 border border-obsidian-700 text-amber-300">
+              [Terminal Here]
+            </button>
+            <button onclick="copyTextToClipboard('${escapeJs(r.path)}')" class="px-2.5 py-1.5 rounded-lg bg-obsidian-800 hover:bg-obsidian-700 border border-obsidian-700 text-slate-300">
+              [Copy Path]
+            </button>
+          </div>
+        </div>
+        <div id="builtin-file-reader-box"></div>
+      `;
+
+      if (r.unified_diff) {
+        const diffLines = r.unified_diff.split('\n').map(line => {
+          if (line.startsWith('+') && !line.startsWith('+++')) return `<div class="bg-emerald-950/60 text-emerald-300 px-2">${escapeHtml(line)}</div>`;
+          if (line.startsWith('-') && !line.startsWith('---')) return `<div class="bg-rose-950/60 text-rose-300 px-2">${escapeHtml(line)}</div>`;
+          if (line.startsWith('@@')) return `<div class="text-cyan-400 px-2 font-bold">${escapeHtml(line)}</div>`;
+          return `<div class="text-slate-400 px-2">${escapeHtml(line)}</div>`;
+        }).join('');
+        html += `
+          <div class="p-3 rounded-xl bg-obsidian-950 border border-cyan-500/30 space-y-1">
+            <div class="text-[10px] uppercase text-cyan-400 font-bold mb-1">Unified Replacement Diff Preview</div>
+            <div class="overflow-x-auto leading-relaxed">${diffLines}</div>
+          </div>
+        `;
+      }
+
+      html += (r.matches || []).map(m => `
+        <div class="p-3 rounded-xl bg-obsidian-950 border border-obsidian-800 space-y-1">
+          <div class="flex items-center justify-between text-[10px] text-slate-400">
+            <span>Line <strong class="text-amber-400">${m.line_number}</strong>, Col ${m.column}</span>
+            <div class="flex items-center gap-2">
+              <span class="px-1.5 py-0.5 rounded bg-obsidian-800 text-cyan-300">scope: ${escapeHtml(m.scope_kind)}</span>
+              ${m.semantic_context ? `<span class="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">${escapeHtml(m.semantic_context)}</span>` : ''}
+            </div>
+          </div>
+          <div class="text-slate-200 bg-obsidian-900 px-2.5 py-1.5 rounded overflow-x-auto">${escapeHtml(m.line_text)}</div>
+          ${m.replaced_line_text ? `<div class="text-emerald-300 bg-emerald-950/30 border border-emerald-500/20 px-2.5 py-1.5 rounded overflow-x-auto">-&gt; ${escapeHtml(m.replaced_line_text)}</div>` : ''}
+        </div>
+      `).join('');
+
+      detailEl.innerHTML = html;
+
+      // If this file was matched by Filename (or only has 1 match), auto-open the Built-In File Reader immediately!
+      if (!r.matches || r.matches.length === 0 || (r.matches.length === 1 && r.matches[0].scope_kind === 'filename')) {
+        loadFullFileReader(idx);
+      }
+    }
+
+    async function runGrouping(groupBy) {
+      const res = await fetch('/v1/group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: document.getElementById('sources').value,
+          file_mask: document.getElementById('file_mask').value,
+          exclude_mask: document.getElementById('exclude_mask').value,
+          include_archives: document.getElementById('opt_archives').checked,
+          group_by: groupBy
+        })
+      });
+      const data = await res.json();
+      document.getElementById('group-summary-badge').textContent =
+        `${data.total_files} files | ${data.total_bytes} bytes | ${data.total_lines} lines | ${data.elapsed_ms} ms`;
+
+      const container = document.getElementById('group-results-container');
+      container.innerHTML = (data.groups || []).map(g => `
+        <div class="p-4 rounded-2xl bg-obsidian-900 border border-obsidian-700 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-sm font-bold text-amber-400">${escapeHtml(g.group_key)}</span>
+            <span class="font-mono text-xs px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300">${g.file_count} files (${g.archive_member_count} in archives)</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-obsidian-950 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-amber-500 to-cyan-400" style="width: ${Math.max(3, g.percentage_bytes)}%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] font-mono text-slate-400">
+            <span>Size: ${g.total_bytes} B (${g.percentage_bytes}%)</span>
+            <span>Lines: ${g.total_lines}</span>
+          </div>
+          <div class="text-[11px] font-mono text-slate-300 space-y-0.5 pt-1 border-t border-obsidian-800">
+            ${g.sample_files.map(sf => `<div class="truncate text-slate-400">* ${escapeHtml(sf)}</div>`).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function runDuplicates() {
+      const res = await fetch('/v1/duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: document.getElementById('sources').value,
+          file_mask: document.getElementById('file_mask').value,
+          exclude_mask: document.getElementById('exclude_mask').value,
+          include_archives: document.getElementById('opt_archives').checked,
+          normalized_whitespace: document.getElementById('dup_normalized').checked,
+          near_duplicates: document.getElementById('dup_near').checked
+        })
+      });
+      const data = await res.json();
+      document.getElementById('dupes-summary-strip').innerHTML = [
+        { label: 'Files Scanned', val: data.total_files_scanned, color: 'text-white' },
+        { label: 'Exact Clusters', val: data.exact_clusters, color: 'text-amber-400' },
+        { label: 'Near-Duplicate Clusters', val: data.near_clusters, color: 'text-cyan-400' },
+        { label: 'Redundant Copies', val: data.total_duplicate_files, color: 'text-rose-400' },
+        { label: 'Wasted Bytes', val: data.total_wasted_bytes + ' B', color: 'text-emerald-400' }
+      ].map(c => `
+        <div class="p-3 rounded-xl bg-obsidian-900 border border-obsidian-700">
+          <div class="text-[10px] font-mono uppercase text-slate-400">${c.label}</div>
+          <div class="text-lg font-mono font-bold ${c.color} mt-0.5">${c.val}</div>
+        </div>
+      `).join('');
+
+      const container = document.getElementById('dupes-results-container');
+      if (!data.clusters || data.clusters.length === 0) {
+        container.innerHTML = `<div class="p-4 rounded-xl bg-obsidian-900 text-xs font-mono text-slate-400">No duplicate files found.</div>`;
+        return;
+      }
+      container.innerHTML = data.clusters.map(c => `
+        <div class="p-4 rounded-2xl bg-obsidian-900 border border-obsidian-700 space-y-2 font-mono text-xs">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">${escapeHtml(c.match_kind)}</span>
+              <span class="text-slate-400">BLAKE3: ${c.hash_blake3}</span>
+            </div>
+            <span class="text-rose-400 font-bold">Wasted: ${c.wasted_bytes} B (${c.files.length} copies)</span>
+          </div>
+          <div class="space-y-1 pt-1">
+            ${c.files.map(f => `
+              <div class="flex items-center justify-between px-3 py-1.5 rounded bg-obsidian-950 border border-obsidian-800">
+                <span class="text-slate-200">${escapeHtml(f.path)} <span class="text-cyan-400">[${f.archive_kind}]</span></span>
+                <span class="${f.is_primary ? 'text-emerald-400' : 'text-amber-400'}">${f.is_primary ? 'PRIMARY' : 'DUPLICATE (' + f.size_bytes + ' B)'}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function runIntentScan() {
+      const res = await fetch('/v1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: document.getElementById('sources').value,
+          file_mask: document.getElementById('file_mask').value,
+          exclude_mask: document.getElementById('exclude_mask').value,
+          include_archives: document.getElementById('opt_archives').checked
+        })
+      });
+      const data = await res.json();
+      const container = document.getElementById('intent-results-container');
+      if (!data.findings || data.findings.length === 0) {
+        container.innerHTML = `<div class="p-4 rounded-xl bg-obsidian-900 text-xs font-mono text-emerald-400">Zero intent issues found across ${data.total_files_scanned} files!</div>`;
+        return;
+      }
+      container.innerHTML = data.findings.map(f => `
+        <div class="p-4 rounded-2xl bg-obsidian-900 border border-obsidian-700 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">${f.severity}</span>
+                <span class="font-mono text-sm font-bold text-white">${escapeHtml(f.title)}</span>
+                <span class="font-mono text-xs text-cyan-400">(${f.total_matches} matches in ${f.affected_files} files)</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">${escapeHtml(f.description)}</p>
+            </div>
+            <button onclick="openIntentInSearch('${escapeJs(f.find_regex)}', '${escapeJs(f.suggested_replace)}')"
+              class="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-mono text-xs font-bold shrink-0">
+              Load into Find &amp; Replace Studio -&gt;
+            </button>
+          </div>
+          <div class="space-y-1 font-mono text-xs">
+            ${f.sample_matches.slice(0, 5).map(s => `
+              <div class="p-2 rounded bg-obsidian-950 border border-obsidian-800 flex flex-wrap items-center justify-between gap-2">
+                <span class="text-slate-300">${escapeHtml(s.file)}:${s.line_number} ${s.semantic_context ? '<span class="text-amber-300">[' + escapeHtml(s.semantic_context) + ']</span>' : ''}</span>
+                <span class="text-rose-300">${escapeHtml(s.matched_text)} <span class="text-emerald-400">-&gt; ${escapeHtml(s.preview_replacement)}</span></span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openIntentInSearch(findRegex, suggestedReplace) {
+      switchTab('search');
+      setFindPreset(findRegex, suggestedReplace, true, false);
+    }
+
+    async function undoLastTransaction(txId = null) {
+      const res = await fetch('/v1/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction_id: txId, list_only: false })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      alert(`Restored ${data.restored_files} file(s) from backup transaction ${data.manifest.transaction_id}`);
+      runSearch(true, false);
+      loadTransactions();
+    }
+
+    async function loadTransactions() {
+      const res = await fetch('/v1/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ list_only: true })
+      });
+      const data = await res.json();
+      const el = document.getElementById('tx-list-container');
+      const txs = data.transactions || [];
+      if (txs.length === 0) {
+        el.innerHTML = `<div class="text-slate-500">No backup transactions recorded yet. Execute a live Replace to create an undoable snapshot.</div>`;
+        return;
+      }
+      el.innerHTML = txs.map(t => `
+        <div class="p-3 rounded-xl bg-obsidian-950 border border-obsidian-800 flex items-center justify-between gap-2">
+          <div>
+            <span class="text-amber-400 font-bold">${t.transaction_id}</span>
+            <span class="text-slate-400 ml-2">${t.timestamp_utc}</span>
+            <div class="text-slate-300 mt-0.5">Find: "${escapeHtml(t.find_pattern)}" -&gt; Replace: "${escapeHtml(t.replace_pattern)}" (${t.files.length} files backed up)</div>
+          </div>
+          <button onclick="undoLastTransaction('${t.transaction_id}')" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold">
+            Rollback Transaction
+          </button>
+        </div>
+      `).join('');
+    }
+
+    async function openFileBrowser(path = null) {
+      const target = path || document.getElementById('sources').value.split(';')[0] || '.';
+      const res = await fetch('/v1/browse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: target })
+      });
+      const data = await res.json();
+      currentBrowserDir = data.current_dir;
+      document.getElementById('browser-current-path').textContent = data.current_dir;
+      document.getElementById('browser-up-btn').onclick = () => {
+        if (data.parent_dir) openFileBrowser(data.parent_dir);
+      };
+      document.getElementById('browser-drives').innerHTML = (data.drives || []).map(d => `
+        <div class="p-2 rounded-xl bg-obsidian-950 border ${d.kind === 'usb' ? 'border-cyan-500/40' : 'border-obsidian-700'} flex items-center justify-between gap-2">
+          <button onclick="openFileBrowser('${escapeJs(d.path)}')" class="text-left truncate flex-1">
+            <div class="font-bold ${d.kind === 'usb' ? 'text-cyan-300' : 'text-amber-400'} truncate">${escapeHtml(d.name)}</div>
+            <div class="text-[10px] text-slate-400 truncate">${escapeHtml(d.path)}</div>
+          </button>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="pickBrowserPath('${escapeJs(d.path)}', false)" class="px-2 py-1 rounded bg-amber-500 text-black font-bold text-[10px]">Select</button>
+            <button onclick="pickBrowserPath('${escapeJs(d.path)}', true)" class="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold text-[10px]">+ Add</button>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('browser-entries').innerHTML = (data.entries || []).map(e => `
+        <div class="flex items-center justify-between p-2 rounded-lg bg-obsidian-950 hover:bg-obsidian-800 border border-obsidian-800">
+          <button onclick="${e.is_dir ? `openFileBrowser('${escapeJs(e.path)}')` : `pickBrowserPath('${escapeJs(e.path)}')`}" class="text-left flex-1 truncate">
+            <span class="${e.is_dir ? 'text-amber-400 font-bold' : (e.is_archive ? 'text-cyan-300' : 'text-slate-200')}">
+              ${e.is_dir ? '[DIR] ' : (e.is_archive ? '[ARC] ' : '[FILE] ')}${escapeHtml(e.name)}
+            </span>
+          </button>
+          <button onclick="pickBrowserPath('${escapeJs(e.path)}', true)" class="px-2 py-0.5 rounded bg-obsidian-800 text-amber-300 hover:bg-obsidian-700 text-[10px]">
+            + Add Source
+          </button>
+        </div>
+      `).join('');
+      const modal = document.getElementById('browser-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeFileBrowser() {
+      const modal = document.getElementById('browser-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function selectCurrentDirInBrowser() {
+      pickBrowserPath(currentBrowserDir, false);
+    }
+
+    function addRemoteUriSource(append) {
+      const val = document.getElementById('remote_uri_input').value.trim();
+      if (!val) return;
+      pickBrowserPath(val, append);
+    }
+
+    async function saveRemoteConnectionProfile() {
+      const name = document.getElementById('remote_prop_name').value.trim();
+      const uri = document.getElementById('remote_uri_input').value.trim();
+      if (!name || !uri) {
+        alert('Enter both a profile name (e.g. prod-ssh) and a remote/cloud URI.');
+        return;
+      }
+      const provider = uri.split('://')[0] || 'ssh';
+      const res = await fetch('/v1/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', name, provider, uri, description: 'Saved in FFRR Studio' })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      document.getElementById('remote_prop_name').value = '';
+      openFileBrowser(currentBrowserDir);
+    }
+
+    function pickBrowserPath(p, append = false) {
+      const el = document.getElementById('sources');
+      if (append && el.value.trim()) {
+        el.value = el.value.trim() + ';' + p;
+      } else {
+        el.value = p;
+      }
+      closeFileBrowser();
+      runSearch(true, false);
+    }
+
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeJs(s) {
+      return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    function toggleCustomMacroDrawer() {
+      document.getElementById('custom-macro-drawer').classList.toggle('hidden');
+    }
+
+    async function loadCustomMacros() {
+      try {
+        const res = await fetch('/v1/macros');
+        const data = await res.json();
+        renderCustomMacroPills(data.macros || []);
+      } catch (_) {}
+    }
+
+    function renderCustomMacroPills(macros) {
+      const container = document.getElementById('custom-macros-pills');
+      if (!container) return;
+      container.innerHTML = macros.map(m => `
+        <button onclick="insertMacro('{{${escapeJs(m.name)}}}')" title="${escapeHtml(m.template)} — ${escapeHtml(m.description)}"
+          class="px-1.5 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300">
+          {{${escapeHtml(m.name)}}}
+        </button>
+      `).join('');
+    }
+
+    async function saveCustomMacroFromUi() {
+      const name = document.getElementById('macro_name_in').value.trim();
+      const template = document.getElementById('macro_tpl_in').value.trim();
+      if (!name || !template) {
+        alert('Please enter both a macro name and template.');
+        return;
+      }
+      const res = await fetch('/v1/macros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', name, template, description: 'Created in FFRR Studio' })
+      });
+      const data = await res.json();
+      if (data.macros) {
+        renderCustomMacroPills(data.macros);
+        document.getElementById('macro_name_in').value = '';
+        document.getElementById('macro_tpl_in').value = '';
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadCustomMacros();
+      runSearch(true, true);
+    });
+  </script>
+</body>
+</html>

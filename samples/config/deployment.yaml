@@ -1,0 +1,7 @@
+# Production deployment configuration
+# TODO: Migrate http:// endpoints to https:// before Q4 audit
+service:
+  name: order-worker
+  upstream_url: "http://orders.internal.example.com/api"
+  bind_host: "127.0.0.1:9090"
+  admin_contact: "secops@example.com"
